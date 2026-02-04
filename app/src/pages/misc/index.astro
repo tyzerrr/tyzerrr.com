@@ -1,0 +1,20 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+const pageTitle = "MISCELLANY";
+
+const items = [
+  { name: 'tmux-sessionizer', url: 'https://github.com/tyzerrr/tmux-sessionizer' },
+  { name: 'spnls', url: 'https://github.com/tyzerrr/spnls' },
+  { name: 'gcs-metadog', url: 'https://github.com/tyzerrr/gcs-metadog' },
+];
+---
+<BaseLayout pageTitle={pageTitle}>
+  <ul class="mt-16">
+    {items.map((item) => (
+      <li class="py-2 flex items-center gap-3">
+        <span class="w-2 h-2 rounded-full bg-gray-600"></span>
+        <a href={item.url} target="_blank" rel="noopener noreferrer">{item.name}</a>
+      </li>
+    ))}
+  </ul>
+</BaseLayout>

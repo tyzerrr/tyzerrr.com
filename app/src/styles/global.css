@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: 'NimbusSansBold';
+  src: url('/fonts/NimbusSansBold.woff2') format('woff2'),
+       url('/fonts/NimbusSansBold.woff') format('woff');
+  font-weight: 800;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'PT Serif';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ptserif/v19/EJRVQgYoZZY2vCFuvAFWzr8.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@layer base {
+  body {
+    font-family: 'PT Serif', serif;
+    font-size: 18px;
+    font-weight: 400;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'NimbusSansBold', sans-serif;
+    font-size: 19px;
+    font-weight: 800;
+    font-style: normal;
+  }
+
+  a {
+    color: rgb(74, 222, 128);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    transition: color 0.15s ease;
+  }
+
+  a:hover {
+    color: rgb(134, 239, 172);
+  }
+
+  nav a {
+    text-decoration: none;
+  }
+
+  .active-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: rgb(74, 222, 128);
+  }
+
+  .nav-link {
+    color: white;
+    transition: color 0.15s ease;
+  }
+
+  .nav-link:hover {
+    color: rgb(134, 239, 172);
+  }
+
+  .nav-link-active {
+    color: rgb(74, 222, 128);
+  }
+}

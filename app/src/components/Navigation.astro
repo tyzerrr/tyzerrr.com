@@ -1,0 +1,37 @@
+---
+interface Props {
+    currentPath: string;
+}
+const { currentPath } = Astro.props;
+
+const navItems = [
+    { name: 'About', href: '/' },
+    { name: 'Writing', href: '/writing/' },
+    { name: 'Misc', href: '/misc/' },
+];
+
+function isActive(href: string, currentPath: string): boolean {
+    if (href === '/') {
+        return currentPath === '/';
+    }
+    return currentPath.startsWith(href);
+}
+---
+<div class="flex flex-col gap-6">
+    <a href="/">
+            <img src="/tyz-green.svg" alt="Logo" class="h-12" />
+    </a>
+    <nav class="flex flex-col gap-2">
+        {navItems.map((item) => (
+            <a
+                href={item.href}
+                class="nav-link flex items-center gap-2"
+            >
+                {isActive(item.href, currentPath) && (
+                    <span class="active-dot"></span>
+                )}
+                <span class={isActive(item.href, currentPath) ? "nav-link-active" : ""}>{item.name}</span>
+            </a>
+        ))}
+    </nav>
+</div>

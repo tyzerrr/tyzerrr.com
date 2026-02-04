@@ -1,0 +1,23 @@
+---
+import BaseLayout from './BaseLayout.astro';
+const { frontmatter } = Astro.props;
+---
+<BaseLayout pageTitle={frontmatter.title}>
+  <p class="text-gray-500 text-right">{new Date(frontmatter.pubDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+
+  {frontmatter.image && (
+    <img src={frontmatter.image.url} width="300" alt={frontmatter.image.alt} />
+  )}
+
+  {frontmatter.tags && frontmatter.tags.length > 0 && (
+    <div class="flex flex-wrap">
+      {frontmatter.tags.map((tag: string) => (
+        <p class="m-1 border border-dotted border-gray-400 rounded-lg px-4 py-2 text-lg bg-gray-100"><a href={`/tags/${tag}`}>{tag}</a></p>
+      ))}
+    </div>
+  )}
+
+  <div class="mt-12 space-y-6">
+    <slot />
+  </div>
+</BaseLayout>

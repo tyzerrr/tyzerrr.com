@@ -1,0 +1,30 @@
+---
+import Navigation from '../components/Navigation.astro';
+import Footer from '../components/Footer.astro';
+import '../styles/global.css';
+const {pageTitle} = Astro.props;
+const currentPath = Astro.url.pathname;
+---
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+        <meta name="viewport" content="width=device-width" />
+        <meta name="generator" content={Astro.generator} />
+        <title>{pageTitle} | tyzerrr.com</title>
+    </head>
+    <body class="bg-gray-900 text-gray-300">
+        <div class="max-w-5xl mx-auto px-6 py-12 flex gap-16">
+            <aside class="w-48 flex-shrink-0">
+                <Navigation currentPath={currentPath} />
+            </aside>
+            <div class="flex-1">
+                <main>
+                    <h1 class="mt-16 text-3xl font-bold text-white">{pageTitle}</h1>
+                    <slot/>
+                </main>
+                <Footer />
+            </div>
+        </div>
+    </body>
+</html>

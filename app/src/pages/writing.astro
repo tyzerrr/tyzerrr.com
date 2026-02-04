@@ -1,0 +1,14 @@
+---
+import BlogPost from '../components/BlogPost.astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import "../styles/global.css";
+
+const pageTitle = "WRITING";
+const allPosts = Object.values(import.meta.glob('./writing/*.md', { eager: true }));
+---
+
+<BaseLayout pageTitle={pageTitle}>
+    <ul class="mt-16">
+        {allPosts.map((post: any) => <BlogPost url={post.url} title={post.frontmatter.title} pubDate={post.frontmatter.pubDate}/>)}
+    </ul>
+</BaseLayout>
