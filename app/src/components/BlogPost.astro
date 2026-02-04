@@ -13,7 +13,7 @@ const formattedDate = new Date(pubDate).toLocaleDateString('en-US', {
 });
 ---
 
-<li class="flex items-center justify-between py-2">
+<li class="flex flex-col sm:flex-row sm:items-center sm:justify-between py-3 sm:py-2 gap-1 sm:gap-0">
     <a href={url} class="text-white font-bold hover:text-green-400 no-underline">{title}</a>
-    <span class="text-gray-400 text-sm ml-4">{formattedDate}</span>
+    <span class="text-gray-400 text-sm sm:ml-4">{formattedDate}</span>
 </li>

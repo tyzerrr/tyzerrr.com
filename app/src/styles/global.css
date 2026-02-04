@@ -20,15 +20,27 @@
 @layer base {
   body {
     font-family: 'PT Serif', serif;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 400;
+  }
+
+  @media (min-width: 768px) {
+    body {
+      font-size: 18px;
+    }
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: 'NimbusSansBold', sans-serif;
-    font-size: 19px;
+    font-size: 17px;
     font-weight: 800;
     font-style: normal;
+  }
+
+  @media (min-width: 768px) {
+    h1, h2, h3, h4, h5, h6 {
+      font-size: 19px;
+    }
   }
 
   a {
@@ -64,5 +76,25 @@
 
   .nav-link-active {
     color: rgb(74, 222, 128);
+  }
+
+  /* Responsive prose content */
+  main {
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+  }
+
+  main img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  main pre {
+    overflow-x: auto;
+    max-width: 100%;
+  }
+
+  main code {
+    word-break: break-word;
   }
 }

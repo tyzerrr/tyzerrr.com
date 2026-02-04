@@ -8,7 +8,7 @@ const allPosts = Object.values(import.meta.glob('./writing/*.md', { eager: true 
 ---
 
 <BaseLayout pageTitle={pageTitle}>
-    <ul class="mt-16">
+    <ul class="mt-8 md:mt-16">
         {allPosts.map((post: any) => <BlogPost url={post.url} title={post.frontmatter.title} pubDate={post.frontmatter.pubDate}/>)}
     </ul>
 </BaseLayout>
