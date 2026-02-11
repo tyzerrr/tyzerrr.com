@@ -22,6 +22,7 @@
     font-family: 'PT Serif', serif;
     font-size: 16px;
     font-weight: 400;
+    @apply antialiased;
   }
 
   @media (min-width: 768px) {
@@ -96,5 +97,31 @@
 
   main code {
     word-break: break-word;
+  }
+
+  main ol {
+    @apply list-decimal pl-6 my-4 space-y-1;
+  }
+
+  main ul {
+    @apply list-disc pl-6 my-4 space-y-1;
+  }
+
+  main table {
+    @apply w-full border-collapse border border-gray-700 my-4;
+  }
+
+  main th,
+  main td {
+    @apply border border-gray-700 px-4 py-2 text-left;
+  }
+
+  main th {
+    @apply bg-gray-800 font-bold;
+    font-family: 'NimbusSansBold', sans-serif;
+  }
+
+  main tr:nth-child(even) {
+    @apply bg-white/3;
   }
 }
