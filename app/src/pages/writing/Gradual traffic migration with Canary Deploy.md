@@ -64,7 +64,7 @@ Initially, everybody comes up with **Rolling Update**, but it has the same probl
 During a rolling update, some pods still run the old version, so we can't achieve the goal: each step must be handled by the same versioned API.  
 
 The solution has two steps.  
-- **Deploy new pods with a 0 value for the v2-routing rate using a Canary deployment strategy**.
+- Deploy new pods with a 0 value for the v2-routing rate.
 - Update the ConfigMap with the v2-routing rate.
 
 The first step is the most important.  
