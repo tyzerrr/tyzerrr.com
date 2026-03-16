@@ -11,6 +11,7 @@ My team is building a microservice that handles all payment transactions on Merc
 We need to handle multiple payment methods like Credit Card 3DS, Apple pay, Famipay and so on.  
 Also, we have been working on building a new API that we call v2 (the previous API is called v1).  
 For now, v1 and v2 are running at the same time, but we need to move to v2 gradually.  
+
 V1 implementation is like [State Machine](https://www.geeksforgeeks.org/system-design/state-design-pattern/), but v2 is implemented with Magician, our internal workflow tool.  
 Magician is inspired by [Cadence](https://github.com/cadence-workflow/cadence), developed by Uber, and it handles retry, timeout, and recoverable errors.  
 By using Magician, we only need to care about essential business logic, and improve service reliability.  
@@ -52,11 +53,11 @@ As you can see, the v2 implementation is completely dependent on Magician, and t
 At first, my task is traffic migration from v1 to v2 for only a specific payment resource. (Since this is my personal tech blog, I can't share all the details with you about my task.)  
 A payment transaction consists of many steps: **Create**, **Authorize**, **Capture**, and each step calls a different API of our service.  
 To avoid compromising the user experience, each consecutive step must be handled by the same versioned API.  
-Also, it is high-risk to move all traffic from v1 to v2 at once, so we need to migrate traffic gradually with Canary deployment.  
+Also, it is high-risk to move all traffic from v1 to v2 at once, so we need to migrate traffic gradually.  
 
-Our service uses Kubernetes, and we decided to control the percentage of traffic to the v2 API by environment variables defined in ConfigMap.
-As usual, we use Canary deployment, however we have a problem.
-Old pods don't have the routing logic, so just updating the ConfigMap and deploying new pods is not enough.
+Our service uses Kubernetes, and we decided to control the percentage of traffic to the v2 API by environment variables defined in ConfigMap.  
+As usual, we use Canary deployment, however we have a problem.  
+Old pods don't have the routing logic, so just updating the ConfigMap and deploying new pods is not enough.  
 
 # Solution
 Initially, everybody comes up with **Rolling Update**, but it has the same problem.  
