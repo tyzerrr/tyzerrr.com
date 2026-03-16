@@ -4,7 +4,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import "../styles/global.css";
 
 const pageTitle = "WRITING";
-const allPosts = Object.values(import.meta.glob('./writing/*.md', { eager: true }));
+const allPosts = Object.values(import.meta.glob('./writing/*.md', { eager: true }))
+    .sort((a: any, b: any) => new Date(a.frontmatter.pubDate).getTime() - new Date(b.frontmatter.pubDate).getTime());
 ---
 
 <BaseLayout pageTitle={pageTitle}>
