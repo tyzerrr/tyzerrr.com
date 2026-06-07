@@ -37,13 +37,15 @@ The obvious fix is to stop self-managing and let RDS do it: `manage_master_user_
 
 But it does not fit this architecture for two concrete reasons.
 
-**1. Read replicas.** For PostgreSQL / MySQL, the replica uses physical replication, so its master password must match the primary exactly. You cannot have the replica manage its own password. Creating a read replica from a source that manages credentials with Secrets Manager fails with:
+**1. Read replicas.** For PostgreSQL / MySQL, AWS does not support creating a read replica from a source instance whose master password is RDS-managed in Secrets Manager. The failure happens because the **source** has `ManageMasterUserPassword` enabled; setting `manage_master_user_password = false` on the replica does not fix it.
+
+The actual error looks like this:
 
 ```
-InvalidParameterValue: ManageMasterUserPassword isn't supported for read replicas
+InvalidParameterValue: Creating read replicas for source instance with engine postgres where ManageMasterUserPassword is enabled is not supported.
 ```
 
-(SQL Server is the exception.) The replica *can* still work by inheriting the parent's credentials — you set `manage_master_user_password = false` on the replica — but it is friction, and the Terraform AWS provider has had ordering bugs around exactly this.
+(SQL Server is the exception.) If read replicas are part of the architecture, the master/admin credential has to be self-managed rather than RDS-managed.
 
 **2. ECS does not pick up rotations.** When you reference a Secrets Manager secret from an ECS task definition, the ECS agent fetches the value **once at task launch** and injects it as an environment variable. It never refreshes. So after any rotation — managed or not — the running tasks hold a stale password, and new connections fail until you redeploy.
 
@@ -53,13 +55,13 @@ Both of these come back to the same root cause.
 
 Both problems exist because the **master password is being rotated and also used by the application**. Split them:
 
-- **Master / admin user** — created once, used *only* by the rotation Lambda, never by the app. Because the app never touches it, ECS staleness is irrelevant for it.
+- **Master / admin user** — created once from a self-managed Secrets Manager secret, used *only* by bootstrap/rotation code, never by the app. Because the app never touches it, ECS staleness is irrelevant for it.
 - **Application user(s)** — a separate, least-privilege user. This is what rotates frequently and what the app actually connects with.
 
 Once you separate them:
 
 - The **ECS staleness** problem is now only about the *app user*, and we solve it deliberately (below).
-- The **read-replica limitation** does not apply to the app user at all — `CREATE USER` / `ALTER USER ... PASSWORD` replicates physically to the replicas, so the app user simply exists on the replicas too.
+- The **RDS-managed-master limitation** no longer blocks the replica, because the primary is no longer using `manage_master_user_password = true`. Normal database users and password changes still replicate to the read replicas.
 
 ## Alternating users, explained properly
 
@@ -149,25 +151,44 @@ The one honest caveat: if a new task connects to a **read replica** with the fre
 
 ## Terraform: keep the secret values out of state
 
-The other goal was to never hardcode credentials and never leave them in Terraform state. Rules that get you there:
+The other goal was to never hardcode credentials and never leave them in Terraform state. With read replicas, the important rule is: **do not use `manage_master_user_password = true` for the primary**. For PostgreSQL, AWS rejects a read replica whose source instance has RDS-managed master credentials.
 
-- **Never pass a password through Terraform.** `aws_db_instance.password` and `random_password` both land in state in plaintext.
-- For the **master**, `manage_master_user_password = true` is the only clean way to have RDS *not* receive a plaintext password from Terraform at all. The replica is created with `manage_master_user_password = false` and inherits.
-- For the **app user**, let Terraform manage only the *box* — the secret and its rotation config — and let the rotation Lambda own the value.
+So the shape is:
+
+- Create a **self-managed admin secret** in Secrets Manager.
+- Create a **self-managed app secret** in Secrets Manager.
+- Use Terraform ephemeral values plus write-only arguments to seed both secrets without storing the passwords in state.
+- Pass the same ephemeral admin password to RDS via `password_wo`, so the RDS master password and the admin secret start in sync.
+- Create the read replica from the primary normally. The replica inherits the database users through replication.
 
 ```hcl
-resource "aws_db_instance" "primary" {
-  identifier                    = "app-db"
-  engine                        = "postgres"
-  username                      = "dbadmin"
-  manage_master_user_password   = true                 # no password in state
-  master_user_secret_kms_key_id = aws_kms_key.db.arn
+locals {
+  db_admin_username = "dbadmin"
+  db_app_username   = "app_user"
 }
 
-resource "aws_db_instance" "replica" {
-  identifier                  = "app-db-replica"
-  replicate_source_db         = aws_db_instance.primary.identifier
-  manage_master_user_password = false                  # inherit from primary
+ephemeral "aws_secretsmanager_random_password" "db_admin" {
+  password_length = 32
+}
+
+ephemeral "aws_secretsmanager_random_password" "db_app" {
+  password_length = 32
+}
+
+resource "aws_secretsmanager_secret" "db_admin" {
+  name       = "app/db/admin"
+  kms_key_id = aws_kms_key.db.arn
+}
+
+resource "aws_secretsmanager_secret_version" "db_admin" {
+  secret_id = aws_secretsmanager_secret.db_admin.id
+
+  secret_string_wo = jsonencode({
+    username = local.db_admin_username
+    password = ephemeral.aws_secretsmanager_random_password.db_admin.random_password
+  })
+
+  secret_string_wo_version = 1
 }
 
 resource "aws_secretsmanager_secret" "app_db" {
@@ -175,28 +196,75 @@ resource "aws_secretsmanager_secret" "app_db" {
   kms_key_id = aws_kms_key.db.arn
 }
 
-resource "aws_secretsmanager_secret_rotation" "app_db" {
-  secret_id           = aws_secretsmanager_secret.app_db.id
-  rotation_lambda_arn = aws_lambda_function.rotator.arn
-  rotation_rules { automatically_after_days = 30 }
+resource "aws_secretsmanager_secret_version" "app_db" {
+  secret_id = aws_secretsmanager_secret.app_db.id
+
+  secret_string_wo = jsonencode({
+    username = local.db_app_username
+    password = ephemeral.aws_secretsmanager_random_password.db_app.random_password
+  })
+
+  secret_string_wo_version = 1
 }
 
-# If you must seed an initial value, never let Terraform fight the Lambda over it:
-resource "aws_secretsmanager_secret_version" "app_db" {
-  secret_id     = aws_secretsmanager_secret.app_db.id
-  secret_string = jsonencode({ username = "app_user", password = "PLACEHOLDER" })
-  lifecycle { ignore_changes = [secret_string] }
+resource "aws_db_instance" "primary" {
+  identifier = "app-db"
+  engine     = "postgres"
+
+  username            = local.db_admin_username
+  password_wo         = ephemeral.aws_secretsmanager_random_password.db_admin.random_password
+  password_wo_version = 1
+
+  backup_retention_period = 7
+
+  # Do not enable this when PostgreSQL read replicas are required.
+  manage_master_user_password = false
+}
+
+resource "aws_db_instance" "replica" {
+  identifier          = "app-db-replica"
+  replicate_source_db = aws_db_instance.primary.identifier
 }
 ```
 
-Creating the app user and seeding its real password belongs in a migration/bootstrap step, not in Terraform. And regardless of all this, keep the state backend on S3 with SSE-KMS and least-privilege access — ARNs and connection metadata are still sensitive.
+The app secret and admin secret now both have initial `username` / `password` JSON values, and the admin secret matches the RDS master credential. Terraform state keeps only metadata such as ARNs and write-only version numbers, not the password bodies.
+
+A later rotation setup attaches to these self-managed secrets:
+
+- The **admin secret** is used by privileged rotation code to connect as the database administrator.
+- The **app secret** is what the application reads and what alternating-users rotation updates.
+
+The app database user still has to exist in PostgreSQL with the password from the app secret. Creating that user and granting privileges belongs in application/database initialization, not in the RDS instance resource itself.
+
+Output only references, never password values:
+
+```hcl
+output "db_admin_secret_arn" {
+  value = aws_secretsmanager_secret.db_admin.arn
+}
+
+output "db_app_secret_arn" {
+  value = aws_secretsmanager_secret.app_db.arn
+}
+
+output "db_primary_host" {
+  value = aws_db_instance.primary.address
+}
+
+output "db_read_replica_host" {
+  value = aws_db_instance.replica.address
+}
+```
+
+And regardless of all this, keep the state backend on S3 with SSE-KMS and least-privilege access. ARNs, hostnames, and connection metadata are still sensitive enough to protect.
 
 ## Summary
 
 - Single-user rotation has a gap between "password changed" and "app uses new password." For a shared master user you cannot close it cleanly.
-- Managed master password keeps state clean and is great for the **master**, but it does not let read replicas manage their own password, and it does nothing about ECS env-var staleness.
-- The fix is to **separate the master user from the application user**. The master is Lambda-only (so ECS staleness is irrelevant) and RDS-managed (so it stays out of state). The app user rotates independently and replicates fine to read replicas.
-- **Alternating users** keeps two valid credentials at all times by only ever rotating the *inactive* user. That is what makes a rotation-triggered ECS redeploy graceful: new tasks use the new credential, old tasks drain on the still-valid old credential — no app-side retry, no cache refresh required (a light retry only for read-replica replication lag).
+- `manage_master_user_password = true` keeps state clean, but it is not compatible with PostgreSQL read replicas. The source primary itself cannot have RDS-managed master credentials.
+- The fix is to **separate the admin user from the application user** and make both credentials self-managed Secrets Manager secrets. Terraform can seed them with ephemeral values and write-only arguments so password bodies do not land in state.
+- The admin secret is for privileged bootstrap/rotation code only. The application uses the app secret, and app-user changes replicate to read replicas like normal database changes.
+- **Alternating users** keeps two valid app credentials at all times by only ever rotating the *inactive* user. That is what makes a rotation-triggered ECS redeploy graceful: new tasks use the new credential, old tasks drain on the still-valid old credential — no app-side retry, no cache refresh required (a light retry only for read-replica replication lag).
 - Watch out for: RDS Proxy not supporting alternating users, and halving your rotation schedule.
 
-The thing I keep coming back to: the answer was not a cleverer Terraform trick. It was separating *who rotates* from *who connects*.
+The thing I keep coming back to: the answer was not RDS-managed master credentials. It was separating *who rotates* from *who connects*, and keeping both secrets self-managed when read replicas are required.
