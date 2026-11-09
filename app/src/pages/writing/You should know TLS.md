@@ -7,61 +7,74 @@ author: 'tyzerrr'
 ---
 
 # If you are a developer, you need to know about TLS
-HTTPSプロトコルはHTTPプロトコルの拡張で、TLSで通信内容を暗号化することで、第三者による通信内容の傍受を防ぐことができます。
-私たちは何かのサービスをインターネット上に公開する際には、ドメインを取得し、HTTPSプロトコルで暗号化された通信をサービスの利用者に提供する必要があります。
-AWSを例にすると、Route53でドメインを取得し、DNS解決を行うネームサーバをHostedZoneに登録し、ACMで証明書を発行して、DNS検証用のCNAMEレコードをHostedZoneに登録し、ALB等にACMで発行した証明書をアタッチして、ALBやCloudFront用のAレコードを追加する必要があります。
-このようなインフラストラクチャは、TerraformなどのIaCを用いれば、AI Agentでも簡単に構築できます。
-しかし、「DNSとは何か？」、「HTTPSプロトコルはどのように実現されるか？」といった本質的な問いに答えられない開発者は、私を含めて少なくないはずです。
-この記事では、HTTPSプロトコルの実現を支えるTLSについて、私が学習した内容をまとめて共有します。
+HTTPS is an extension of the HTTP protocol.
+It encrypts transmitted data with TLS (Transport Layer Security), which can protects against attack like tampering.
 
-こちらの記事は全て人間が書いたものであり、多少の間違いが含まれる可能性があります。
+When we publish a service to the Internet, we need to get a domain and provide encrypted communication with HTTPS to users.
+Taking AWS as an example, we need to get a domain on Route53, set up name server for DNS resolution, issue certificate on ACM, register CNAME records for DNS validation to hosted zone, attach certificate to ALB, add A record for CloudFront, ALB.
+We are able to build this kind of infrastructure with AI Agent as IaC code like Terraform easily.
+However, we can find many developers who can not answer fundamental questions kike "What is DNS" or "How does HTTPS work?", including myself.
+In this post, I share what I learned about TLS which supports HTTPS.
+
+This post is written by a human, it might contain some mistakes.
 
 # What is TLS?
-TLSはTransport Layer Securityの略です。
-TLSは、以下の図に示すように4つのStepから構成されます。(尚、ここではTLS1.2のみについて説明します。現在の主要なBrowserでサポートされる最新のTLS1.3はTLS1.2の拡張であり、TLSを理解するための題材として適切でないと判断しました。)
-以下で各Stepについて説明します。
+TLS stands for Transport Layer Security.
+TLS consists of four steps as shown in the diagram below. (We only touch TLS1.2 here. TLS1.3, latest version of TLS that is supported by almost all major brosers is an extension of TLS1.2, I decided it's not the best starting point to understand the fundamentals of TLS.)
 
 ![HTTPS illustrated](/images/https-illustrated.png)
 
 ## 1. TCP Handshake
-TLSはTCP上で動作するプロトコルであり、TLS handshakeが始まる前提として、まずTCPコネクションが確立されている必要があります。
-この前提となるTCP Handshakeについて説明します。
-まず最初にClientからServerに、ランダムに初期化されたシーケンス番号を添えて接続要求(SYN)を送ります。
-ServerはClientのシーケンス番号を確認して、接続要求をACKし、自身のシーケンス番号を添えて、Clientに接続確認(SYN+ACK)を送り返します。
-ClientはServerのシーケンス番号を確認し、ACK(接続確認)をServerに送信することで、TCPコネクションが確立されます。
+TLS is a protocol that runs over TCP.
+Before the TLS handshake can begin, a TCP connection needs to be established.
+Let's look at how the TCP handshake works.
+At first, the client sends a connection request (SYN) with sequence number initialized randomlyto the server.
+The Server checks the sequence number sent from the client, acknowledges the connection request.
+It then sends back a response(SYN+ACK) containing its own sequence number to the client.
+The client checks the sequence number sent from the server, and sends an acknowledement(ACK) back to the server, which establishes the TCP connection.
+
 
 ## 2. Certificate Check
-TLSの2つ目のStepはCertificate Checkです。
-このStepでは、通信暗号化に利用するCipherSuite、TLSのバージョンについてClientとServerで合意します。
-まず、Clientは自身がSupportするTLSバージョンやCipherSuiteをServerに送り(Client Hello)、Serverはその内容から、実際に通信に利用する暗号化プロトコルを選択してClientに返します(Server Hello)。
-次にServerはClientに証明書を送信します。
-証明書には、サーバの公開鍵が含まれており、この公開鍵で暗号化された内容は、サーバに保存された秘密鍵でのみ復号化されます。
+The second step of TLS is the certificate check.
+In this step, the client and the server agree on the cipher suite and the TLS version.
+
+First, the client tells the server what cipher suites and which version of TLS it supports (Client Hello).
+Then the server chooses the ones to actually use for the connection and sends its choise back to the client (Server Hello).
+
+Next, the server sends its certificate to the client.
+The certificate contains a public key of the server, anything encrypted with this public key can only be decrypted with the private key stored on the server.
 
 ## 3. Key Exchange
-TLSの3つ目のStepはKey Exchangeです。
-名前の通り、このStepではClientとServerが通信に利用する鍵を交換します。
-具体的なアルゴリズムは、利用するCipherSuiteによって異なりますが、ここでは最も理解しやすいRSAを用いて説明します。
-RSAでは、Clientで生成したセッション鍵をサーバーの公開鍵で暗号化しServerに送信します(Client Key Exchange)。
-Serverには公開鍵と対になる秘密鍵が保存されており、暗号化されたセッション鍵は、サーバの秘密鍵でのみ復号できます。
-この非対称性によって、暗号化された通信を解読できるのは、通信を確立したClientとServerのみであることが保証されます。
+The third step is the exchange.
+As its name implies, the client and the server exchange the key used for the connection.
 
-鍵の交換が終わると、ClientとServerはそれぞれ`Change Cipher Spec`を送り合います。これは「これ以降の通信は、今合意したセッション鍵による暗号化方式で行う」という合図です。
-続けて送られる`Finished`は、それまでのhandshakeでやり取りした内容が改ざんされていないことを確認するためのメッセージで、handshake全体の内容から計算したハッシュ値が含まれています。双方が`Finished`を検証できれば、Key Exchangeは完了です。
+The specific algorithm depends on the cipher suite, but let's look at the case using RSA.
+With RSA, the client encrypts a session key it has genertated with the server's public key and sends it to the server(Client Key Exchange).
+The Server stores a paird private key, so the encrypted session key can only be decrypted with server's private key.
+This asymmetry ensures that only the client and the server that established the connection can decrypt the encrypted communication.
 
-## 全ての通信を非対称アルゴリズムで生成された鍵で行わないのは何故か？
-サーバの公開鍵と秘密鍵のような、非対称アルゴリズムで生成された、もう一組の鍵を生成して通信の暗号化に用いる方法も考えられます。
-確かに原理的には可能ですが、非対称アルゴリズムの復号化は対称アルゴリズムのそれと比べて、計算コストが高く、大量のデータ送信に向いていません。
+Once the key exchange is complete, both the client and the server send the `Change Cipher Spec` message.
+This message signals that "we use this encrypted session key on this connection from now on".
+The Finished message that follows verifies that the handshake messages exchanged so far haven't been tampered with. 
+It contains a hash value computed from the entire handshake. 
+Once both sides have verified each other's Finished message, the key exchange is complete.
+
+## Why not use asymmetric encryption for all communication?
+You may wonder why we do not generate another key pair with an asymetric algorithm.
+This is possible, but asymmetric decryption taks high calculation cost, so it is not proper for sending large amount of data.
 
 ## 4. Data Transmission
-TLSの4つ目のStepはData Transmissionです。
-Key Exchangeで共有したセッション鍵を使い、ClientとServerは対称暗号化によって通信内容を暗号化してやり取りします。対称暗号化は非対称暗号化と比べて計算コストが低いため、大量のデータを効率よくやり取りできます。
+The last step is the data transmission.
+Using the session key shared in the key exchange step, the client and the server encrypt their communication with symmetric encryption.
+Symmetric encryption is less computationally expensive than asymmetric encryption, so it can handle large amounts of data efficiently.
+
 
 ## Notes about changes from TLS1.2 to TLS1.3
-TLS1.3はHandshakeのネットワークラウンドトリップの回数を1回に減らし、パフォーマンスを向上させました。
-また、利用可能な鍵交換方法をECDHEに統一し、利用可能な暗号化アルゴリズムを整理して、より安全で統一されたものに変更しました。
-詳しくは、[こちらの記事](https://zenn.dev/nttdata_tech/articles/9beb886173eaa2)を参照してください。
+TLS 1.3 reduced the number of network round trips in the handshake to one, improving performance.
+It also unified the available key exchange methods into ECDHE and cleaned up the available encryption algorithms, making them more secure and consistent.
+For more details, see [this article](https://zenn.dev/nttdata_tech/articles/9beb886173eaa2) (in Japanese).
 
-# まとめ
-TLSは、非対称アルゴリズムによって暗号化されたセッション鍵による対称暗号化によって、低い計算コストで完全に暗号化された通信を提供する仕組みと言えます。
-この記事を通して1人でも多くの開発者がTLSの基本的な知識を身につけ、より良い仕事と成果を生み出せることを願います。
-これからも継続的に私の学びをブログとして公開する予定です。
+# Summary
+In short, TLS provides fully encrypted communication at a low computational cost by using symmetric encryption with a session key that is protected by asymmetric encryption.
+I hope this post helps as many developers as possible gain a basic understanding of TLS and do even better work.
+I plan to keep sharing what I learn on this blog.
