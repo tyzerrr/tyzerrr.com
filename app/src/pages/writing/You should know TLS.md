@@ -1,7 +1,7 @@
 ---
 layout: ../../layouts/MarkdownPostLayout.astro
 title: 'You should know about TLS'
-pubDate: 2026-11-04
+pubDate: 2026-11-09
 description: 'Learning log about TLS1.2'
 author: 'tyzerrr'
 ---
