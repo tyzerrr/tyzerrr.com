@@ -1,0 +1,40 @@
+---
+import BaseLayout from './BaseLayout.astro';
+
+const { frontmatter } = Astro.props;
+const finishedDate = frontmatter.finishedDate
+  ? new Date(frontmatter.finishedDate).toLocaleDateString('ja-JP', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
+  : null;
+---
+
+<BaseLayout pageTitle={frontmatter.title}>
+  <div class="mt-4 md:mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm md:text-base text-gray-400">
+    {frontmatter.bookAuthor && <span>著者: {frontmatter.bookAuthor}</span>}
+    {frontmatter.publisher && <span>出版社: {frontmatter.publisher}</span>}
+    {finishedDate && <span>読了: {finishedDate}</span>}
+  </div>
+
+  {frontmatter.description && (
+    <p class="mt-5 border-l-2 border-green-400 pl-4 text-gray-300">
+      {frontmatter.description}
+    </p>
+  )}
+
+  {frontmatter.tags?.length > 0 && (
+    <div class="mt-5 flex flex-wrap gap-2">
+      {frontmatter.tags.map((tag: string) => (
+        <span class="rounded-lg border border-dotted border-gray-500 bg-gray-800 px-3 py-1 text-sm text-gray-300">
+          {tag}
+        </span>
+      ))}
+    </div>
+  )}
+
+  <article class="reading-content mt-8 md:mt-12 space-y-4 md:space-y-6">
+    <slot />
+  </article>
+</BaseLayout>
